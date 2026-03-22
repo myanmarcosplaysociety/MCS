@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, doc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Calendar, MapPin, Clock, Image as ImageIcon, Upload, Trash2, Video } from 'lucide-react';
+import { Calendar, MapPin, Clock, Image as ImageIcon, Upload, Trash2, Video, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -14,6 +14,7 @@ interface EventHighlight {
   description: string;
   date: string;
   location: string;
+  mapUrl?: string;
   coverImage: string;
   mediaUrls: string[];
   createdAt: string;
@@ -30,6 +31,7 @@ export function EventHighlightsSection() {
     description: '',
     date: '',
     location: '',
+    mapUrl: '',
   });
   
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -104,7 +106,7 @@ export function EventHighlightsSection() {
 
       toast.success('Event highlight posted!');
       setIsCreating(false);
-      setNewHighlight({ title: '', description: '', date: '', location: '' });
+      setNewHighlight({ title: '', description: '', date: '', location: '', mapUrl: '' });
       setCoverFile(null);
       setCoverPreview(null);
       setMediaFiles([]);
@@ -183,6 +185,16 @@ export function EventHighlightsSection() {
                       value={newHighlight.location}
                       onChange={(e) => setNewHighlight({ ...newHighlight, location: e.target.value })}
                       className="w-full bg-zinc-950 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-1">Google Maps URL</label>
+                    <input
+                      type="url"
+                      value={newHighlight.mapUrl}
+                      onChange={(e) => setNewHighlight({ ...newHighlight, mapUrl: e.target.value })}
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-cyan-500"
+                      placeholder="https://maps.google.com/..."
                     />
                   </div>
                 </div>
@@ -310,6 +322,17 @@ export function EventHighlightsSection() {
                           <div className="flex items-center gap-2">
                             <MapPin className="w-4 h-4 text-fuchsia-400" />
                             {highlight.location}
+                            {highlight.mapUrl && (
+                              <a
+                                href={highlight.mapUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                View Map
+                              </a>
+                            )}
                           </div>
                         )}
                       </div>
