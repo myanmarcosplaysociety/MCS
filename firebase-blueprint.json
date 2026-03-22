@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A registered user of the platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID." },
+        "username": { "type": "string", "description": "The user's display name." },
+        "avatarUrl": { "type": "string", "format": "uri", "description": "URL to the user's avatar image." },
+        "bio": { "type": "string", "description": "A short biography of the user." },
+        "role": { "type": "string", "enum": ["admin", "mod", "user"], "description": "The user's role." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created." }
+      },
+      "required": ["uid", "username", "role", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A cosplay highlight post.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string", "description": "The UID of the user who created the post." },
+        "authorName": { "type": "string", "description": "The username of the author." },
+        "authorAvatar": { "type": "string", "description": "The avatar URL of the author." },
+        "imageUrl": { "type": "string", "format": "uri", "description": "The URL of the uploaded cosplay image." },
+        "caption": { "type": "string", "description": "The caption for the post." },
+        "tags": { "type": "array", "items": { "type": "string" }, "description": "Tags associated with the post." },
+        "likesCount": { "type": "number", "description": "Number of likes the post has received." },
+        "commentsCount": { "type": "number", "description": "Number of comments on the post." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the post was created." }
+      },
+      "required": ["authorId", "authorName", "imageUrl", "likesCount", "commentsCount", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "The ID of the post being commented on." },
+        "authorId": { "type": "string", "description": "The UID of the user who created the comment." },
+        "authorName": { "type": "string", "description": "The username of the author." },
+        "authorAvatar": { "type": "string", "description": "The avatar URL of the author." },
+        "content": { "type": "string", "description": "The text content of the comment." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the comment was created." }
+      },
+      "required": ["postId", "authorId", "authorName", "content", "createdAt"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "An upcoming cosplay event.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the event." },
+        "description": { "type": "string", "description": "Details about the event." },
+        "date": { "type": "string", "format": "date-time", "description": "The date and time of the event." },
+        "location": { "type": "string", "description": "Where the event is taking place." },
+        "imageUrl": { "type": "string", "format": "uri", "description": "An image for the event." },
+        "authorId": { "type": "string", "description": "The UID of the admin who created the event." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the event was created." }
+      },
+      "required": ["title", "description", "date", "location", "authorId", "createdAt"]
+    },
+    "Article": {
+      "title": "Article",
+      "description": "A news article or announcement.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the article." },
+        "content": { "type": "string", "description": "The main content of the article." },
+        "category": { "type": "string", "description": "The category of the article." },
+        "imageUrl": { "type": "string", "format": "uri", "description": "A header image for the article." },
+        "authorId": { "type": "string", "description": "The UID of the admin who created the article." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the article was created." }
+      },
+      "required": ["title", "content", "category", "authorId", "createdAt"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "A like on a post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "The ID of the post." },
+        "userId": { "type": "string", "description": "The UID of the user who liked the post." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the like was created." }
+      },
+      "required": ["postId", "userId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Stores cosplay highlight posts."
+    },
+    "comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Stores comments on posts."
+    },
+    "events/{eventId}": {
+      "schema": { "$ref": "#/entities/Event" },
+      "description": "Stores upcoming events."
+    },
+    "articles/{articleId}": {
+      "schema": { "$ref": "#/entities/Article" },
+      "description": "Stores news articles."
+    },
+    "likes/{likeId}": {
+      "schema": { "$ref": "#/entities/Like" },
+      "description": "Stores likes on posts."
+    }
+  }
+}

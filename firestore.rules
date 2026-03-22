@@ -1,0 +1,232 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required) - The user's unique ID
+    //   - username: string (required, < 50 chars) - The user's display name
+    //   - avatarUrl: string (optional, < 500 chars) - URL to the user's avatar image
+    //   - bio: string (optional, < 500 chars) - A short biography
+    //   - role: string (required, 'admin', 'mod', 'user') - The user's role
+    //   - createdAt: string (required) - ISO 8601 date string
+    //
+    // Collection: posts
+    // Document ID: {postId}
+    // Fields:
+    //   - authorId: string (required) - The UID of the user who created the post
+    //   - authorName: string (required, < 50 chars) - The username of the author
+    //   - authorAvatar: string (optional, < 500 chars) - The avatar URL of the author
+    //   - imageUrl: string (required, < 500 chars) - The URL of the uploaded image
+    //   - caption: string (optional, < 1000 chars) - The caption for the post
+    //   - tags: list of strings (optional, max 10, each < 30 chars) - Tags
+    //   - likesCount: number (required, >= 0) - Number of likes
+    //   - commentsCount: number (required, >= 0) - Number of comments
+    //   - createdAt: string (required) - ISO 8601 date string
+    //
+    // Collection: comments
+    // Document ID: {commentId}
+    // Fields:
+    //   - postId: string (required) - The ID of the post
+    //   - authorId: string (required) - The UID of the user
+    //   - authorName: string (required, < 50 chars) - The username
+    //   - authorAvatar: string (optional, < 500 chars) - The avatar URL
+    //   - content: string (required, < 1000 chars) - The comment text
+    //   - createdAt: string (required) - ISO 8601 date string
+    //
+    // Collection: events
+    // Document ID: {eventId}
+    // Fields:
+    //   - title: string (required, < 100 chars)
+    //   - description: string (required, < 2000 chars)
+    //   - date: string (required)
+    //   - location: string (required, < 200 chars)
+    //   - imageUrl: string (optional, < 500 chars)
+    //   - authorId: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: articles
+    // Document ID: {articleId}
+    // Fields:
+    //   - title: string (required, < 100 chars)
+    //   - content: string (required, < 5000 chars)
+    //   - category: string (required, < 50 chars)
+    //   - imageUrl: string (optional, < 500 chars)
+    //   - authorId: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: likes
+    // Document ID: {likeId} (format: userId_postId)
+    // Fields:
+    //   - postId: string (required)
+    //   - userId: string (required)
+    //   - createdAt: string (required)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.authorId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        (request.auth.token.email == "Meotakufever@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isMod() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'mod']) ||
+        (request.auth.token.email == "Meotakufever@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !('field' in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*") || url.matches("^data:image/.*"));
+    }
+
+    function isValidOptionalUrl(field) {
+      return !(field in request.resource.data) || isValidUrl(request.resource.data[field]);
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'username', 'role', 'createdAt']) &&
+             data.keys().hasOnly(['uid', 'username', 'avatarUrl', 'bio', 'role', 'createdAt']) &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             isValidOptionalUrl('avatarUrl') &&
+             isValidOptionalString('bio', 0, 500) &&
+             data.role in ['admin', 'mod', 'user'] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['authorId', 'authorName', 'imageUrl', 'likesCount', 'commentsCount', 'createdAt']) &&
+             data.keys().hasOnly(['authorId', 'authorName', 'authorAvatar', 'imageUrl', 'caption', 'tags', 'likesCount', 'commentsCount', 'createdAt']) &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 50 &&
+             isValidOptionalUrl('authorAvatar') &&
+             isValidUrl(data.imageUrl) &&
+             isValidOptionalString('caption', 0, 1000) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
+             data.likesCount is number && data.likesCount >= 0 &&
+             data.commentsCount is number && data.commentsCount >= 0 &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['postId', 'authorId', 'authorName', 'content', 'createdAt']) &&
+             data.keys().hasOnly(['postId', 'authorId', 'authorName', 'authorAvatar', 'content', 'createdAt']) &&
+             data.postId is string && data.postId.size() > 0 &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 50 &&
+             isValidOptionalUrl('authorAvatar') &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 1000 &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['title', 'description', 'date', 'location', 'authorId', 'createdAt']) &&
+             data.keys().hasOnly(['title', 'description', 'date', 'location', 'imageUrl', 'authorId', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 2000 &&
+             isValidDateString(data.date) &&
+             data.location is string && data.location.size() > 0 && data.location.size() < 200 &&
+             isValidOptionalUrl('imageUrl') &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidArticle(data) {
+      return data.keys().hasAll(['title', 'content', 'category', 'authorId', 'createdAt']) &&
+             data.keys().hasOnly(['title', 'content', 'category', 'imageUrl', 'authorId', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 50 &&
+             isValidOptionalUrl('imageUrl') &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidLike(data) {
+      return data.keys().hasAll(['postId', 'userId', 'createdAt']) &&
+             data.keys().hasOnly(['postId', 'userId', 'createdAt']) &&
+             data.postId is string && data.postId.size() > 0 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             isValidDateString(data.createdAt);
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.uid == resource.data.uid && request.resource.data.createdAt == resource.data.createdAt && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidPost(request.resource.data) && request.resource.data.likesCount == 0 && request.resource.data.commentsCount == 0;
+      allow update: if isAuthenticated() && (
+        (isDocOwner() && isValidPost(request.resource.data) && request.resource.data.authorId == resource.data.authorId && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.likesCount == resource.data.likesCount && request.resource.data.commentsCount == resource.data.commentsCount) ||
+        (isMod() && isValidPost(request.resource.data) && request.resource.data.authorId == resource.data.authorId && request.resource.data.createdAt == resource.data.createdAt) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount']) && math.abs(request.resource.data.likesCount - resource.data.likesCount) == 1) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount']) && math.abs(request.resource.data.commentsCount - resource.data.commentsCount) == 1)
+      );
+      allow delete: if isDocOwner() || isMod();
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidComment(request.resource.data) && exists(/databases/$(database)/documents/posts/$(request.resource.data.postId));
+      allow update: if isAuthenticated() && isDocOwner() && isValidComment(request.resource.data) && request.resource.data.authorId == resource.data.authorId && request.resource.data.postId == resource.data.postId && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner() || isMod();
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidEvent(request.resource.data);
+      allow update: if isAdmin() && isValidEvent(request.resource.data) && request.resource.data.authorId == resource.data.authorId && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /articles/{articleId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidArticle(request.resource.data);
+      allow update: if isAdmin() && isValidArticle(request.resource.data) && request.resource.data.authorId == resource.data.authorId && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /likes/{likeId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidLike(request.resource.data) && likeId == request.resource.data.userId + '_' + request.resource.data.postId;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
